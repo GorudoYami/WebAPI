@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Services\AccountsService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="C:\Users\GorudoYami\.nuget\packages\mysql.data.entityframework\8.0.27\contentFiles\any\netstandard2.1\app.config.transform" />
+    <Content Remove="C:\Users\GorudoYami\.nuget\packages\mysql.data.entityframework\8.0.27\contentFiles\any\netstandard2.1\web.config.transform" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\.editorconfig" Link=".editorconfig" />
+    <Resource Include="Services\AccountsService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="5.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="5.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="5.0.2" />
+    <PackageReference Include="MySql.Data.EntityFramework" Version="8.0.27" />
+    <PackageReference Include="MySql.EntityFrameworkCore" Version="5.0.8" />
+  </ItemGroup>
+
+</Project>
