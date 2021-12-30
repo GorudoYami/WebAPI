@@ -11,5 +11,8 @@ namespace WebAPI.Data.Models {
 		[Required]
 		public string Name { get; set; }
 		public string Description { get; set; }
+		public ICollection<Account> Accounts { get; set; }
+		public ICollection<Permission> PermissionGrants { get; set; }
+		public ICollection<Permission> PermissionDenies { get; set; }
 	}
 }

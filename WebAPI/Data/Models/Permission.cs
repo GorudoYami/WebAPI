@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 namespace WebAPI.Data.Models {
 	public class Permission {
 		[Required]
+		[Key]
 		public int PermissionID { get; set; }
 		[Required]
 		public string Name { get; set; }

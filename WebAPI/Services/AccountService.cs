@@ -165,7 +165,7 @@ namespace WebAPI.Services {
 		private static (string Password, string Salt) EncryptPassword(string password, string salt = null) {
 			byte[] saltBytes = new byte[128 / 8];
 			if (salt == null || salt == string.Empty) {
-				using RNGCryptoServiceProvider rng = new();
+				using var rng = RandomNumberGenerator.Create();
 				rng.GetNonZeroBytes(saltBytes);
 				salt = Convert.ToBase64String(saltBytes);
 			}
@@ -184,6 +184,7 @@ namespace WebAPI.Services {
 		}
 
 		public async Task<ServiceResult<List<Permission>>> GetPermissions(int accountID) {
+			throw new NotImplementedException();
 			try {
 				Account account = await Database.Accounts.SingleAsync(a => a.AccountID == accountID);
 				//Database.Permissions.
