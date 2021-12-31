@@ -18,13 +18,13 @@ using WebAPI.Data.TransferObjects;
 
 namespace WebAPI.Services {
 	public class AccountService {
-		private readonly Database Database;
+		private readonly DatabaseContext DatabaseContext;
 		private readonly IConfiguration Configuration;
 		private readonly ILogger<AccountService> Logger;
 
-		public AccountService(IConfiguration configuration, Database database, ILogger<AccountService> logger) {
+		public AccountService(IConfiguration configuration, DatabaseContext database, ILogger<AccountService> logger) {
 			Configuration = configuration;
-			Database = database;
+			DatabaseContext = database;
 			Logger = logger;
 		}
 
@@ -33,9 +33,9 @@ namespace WebAPI.Services {
 				SymmetricSecurityKey key = new(Encoding.UTF8.GetBytes(Configuration["JwtSettings:Key"]));
 				uint tokenLifetime = Configuration.GetValue<uint>("JwtSettings:TokenLifetime");
 
-				Account account = await Database.Accounts.Where(a => a.Email == loginDTO.Login).SingleOrDefaultAsync();
+				Account account = await DatabaseContext.Accounts.Where(a => a.Email == loginDTO.Login).SingleOrDefaultAsync();
 				if (account is null)
-					account = await Database.Accounts.Where(a => a.Username == loginDTO.Login).SingleOrDefaultAsync();
+					account = await DatabaseContext.Accounts.Where(a => a.Username == loginDTO.Login).SingleOrDefaultAsync();
 
 				if (account is null)
 					return new(ResultType.NotFound);
@@ -80,9 +80,9 @@ namespace WebAPI.Services {
 
 		public async Task<ServiceResult<string>> RegisterAsync(RegisterDTO registerDTO) {
 			try {
-				if (await Database.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
+				if (await DatabaseContext.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
 					return new(ResultType.EmailTaken);
-				else if (await Database.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
+				else if (await DatabaseContext.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
 					return new(ResultType.UsernameTaken);
 
 				var (Password, Salt) = EncryptPassword(registerDTO.Password);
@@ -95,8 +95,8 @@ namespace WebAPI.Services {
 				};
 
 
-				await Database.Accounts.AddAsync(account);
-				await Database.SaveChangesAsync();
+				await DatabaseContext.Accounts.AddAsync(account);
+				await DatabaseContext.SaveChangesAsync();
 				return new(ResultType.Ok);
 			}
 			catch (Exception ex) {
@@ -141,8 +141,8 @@ namespace WebAPI.Services {
 				if (oldPassword.Password == account.Password) {
 					account.Password = newPassword.Password;
 					account.Salt = newPassword.Salt;
-					Database.Accounts.Update(account);
-					Database.SaveChanges();
+					DatabaseContext.Accounts.Update(account);
+					DatabaseContext.SaveChanges();
 					return new(ResultType.Ok);
 				}
 
@@ -159,7 +159,7 @@ namespace WebAPI.Services {
 			JwtSecurityToken jwt = handler.ReadJwtToken(token);
 			int accountID = int.Parse(jwt.Subject);
 
-			return (await Database.Accounts.FindAsync(accountID)) ?? throw new Exception("Couldn't find account with ID = " + accountID);
+			return (await DatabaseContext.Accounts.FindAsync(accountID)) ?? throw new Exception("Couldn't find account with ID = " + accountID);
 		}
 
 		private static (string Password, string Salt) EncryptPassword(string password, string salt = null) {
@@ -186,7 +186,7 @@ namespace WebAPI.Services {
 		public async Task<ServiceResult<List<Permission>>> GetPermissions(int accountID) {
 			throw new NotImplementedException();
 			try {
-				Account account = await Database.Accounts.SingleAsync(a => a.AccountID == accountID);
+				Account account = await DatabaseContext.Accounts.SingleAsync(a => a.AccountID == accountID);
 				//Database.Permissions.
 			}
 			catch (Exception ex) {
