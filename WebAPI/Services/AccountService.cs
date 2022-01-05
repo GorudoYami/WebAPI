@@ -16,183 +16,195 @@ using WebAPI.Data;
 using WebAPI.Data.Models;
 using WebAPI.Data.TransferObjects;
 
-namespace WebAPI.Services {
-	public class AccountService {
-		private readonly DatabaseContext DatabaseContext;
-		private readonly IConfiguration Configuration;
-		private readonly ILogger<AccountService> Logger;
+namespace WebAPI.Services;
 
-		public AccountService(IConfiguration configuration, DatabaseContext database, ILogger<AccountService> logger) {
-			Configuration = configuration;
-			DatabaseContext = database;
-			Logger = logger;
+public class AccountService {
+	private readonly IConfiguration Configuration;
+	private readonly ILogger<AccountService> Logger;
+	private readonly DatabaseContext DatabaseContext;
+	private readonly JwtService JwtService;
+	private readonly Role DefaultRole;
+
+	public AccountService(IConfiguration configuration, ILogger<AccountService> logger, DatabaseContext database, JwtService jwtService) {
+		Configuration = configuration;
+		DatabaseContext = database;
+		Logger = logger;
+		JwtService = jwtService;
+
+		DefaultRole = GetDefaultRole();
+	}
+
+	private Role GetDefaultRole() {
+		Role defaultRole = null;
+		try {
+			GlobalVariable gv = DatabaseContext.GlobalVariables.Single(gv => gv.Name == "DefaultRole");
+			int roleID = int.Parse(gv.Value);
+
+			defaultRole = DatabaseContext.Roles.Find(roleID);
+		}
+		catch (Exception ex) {
+			Logger.LogCritical(ex, "Account creation will not be possible!");
 		}
 
-		public async Task<ServiceResult<string>> LoginAsync(LoginDTO loginDTO) {
-			try {
-				SymmetricSecurityKey key = new(Encoding.UTF8.GetBytes(Configuration["JwtSettings:Key"]));
-				uint tokenLifetime = Configuration.GetValue<uint>("JwtSettings:TokenLifetime");
+		return defaultRole;
+	}
 
-				Account account = await DatabaseContext.Accounts.Where(a => a.Email == loginDTO.Login).SingleOrDefaultAsync();
-				if (account is null)
-					account = await DatabaseContext.Accounts.Where(a => a.Username == loginDTO.Login).SingleOrDefaultAsync();
+	public async Task<ServiceResult<string>> LoginAsync(LoginDTO loginDTO) {
+		try {
+			Account account = await GetAccount(username: loginDTO.Login, email: loginDTO.Login);
+			if (account is null)
+				return new(ResultType.NotFound);
 
-				if (account is null)
-					return new(ResultType.NotFound);
+			string password = JwtService.GetPasswordHash(loginDTO.Password, account.Salt);
 
-				byte[] salt = Convert.FromBase64String(account.Salt);
-				string password = Convert.ToBase64String(KeyDerivation.Pbkdf2(
-					password: loginDTO.Password,
-					salt: salt,
-					prf: KeyDerivationPrf.HMACSHA512,
-					iterationCount: 100000,
-					numBytesRequested: 512 / 8));
-
-				if (password != account.Password)
-					return new(ResultType.NotFound);
-
-				List<Claim> claims = new() {
-					new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-					new Claim(JwtRegisteredClaimNames.Sub, account.AccountID.ToString())
-				};
-
-				JwtSecurityTokenHandler handler = new();
-
-				string token = handler.CreateEncodedJwt(
-					issuer: Configuration["JwtSettings:Issuer"],
-					audience: Configuration["JwtSettings:Audience"],
-					subject: new ClaimsIdentity(claims),
-					notBefore: DateTime.UtcNow,
-					issuedAt: DateTime.UtcNow,
-					expires: DateTime.UtcNow.AddMinutes(tokenLifetime),
-					signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha512)
-				);
-
-				return new(ResultType.Ok) {
-					Value = token
-				};
-			}
-			catch (Exception ex) {
-				Logger.LogError("Exception occured in {Location}: {Message}\n{StackTrace}", ex.Source, ex.Message, ex.StackTrace);
-				return new(ResultType.Exception);
-			}
+			return password != account.Password
+				? (new(ResultType.NotFound))
+				: (new(ResultType.Ok) {
+					Value = JwtService.CreateEncodedJwt(account.AccountID)
+				});
 		}
-
-		public async Task<ServiceResult<string>> RegisterAsync(RegisterDTO registerDTO) {
-			try {
-				if (await DatabaseContext.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
-					return new(ResultType.EmailTaken);
-				else if (await DatabaseContext.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
-					return new(ResultType.UsernameTaken);
-
-				var (Password, Salt) = EncryptPassword(registerDTO.Password);
-				Account account = new() {
-					Email = registerDTO.Email,
-					Username = registerDTO.Username,
-					Password = Password,
-					Salt = Salt,
-					RoleID = 5  // Default group - change to something like a static class that loads Roles to fields
-				};
-
-
-				await DatabaseContext.Accounts.AddAsync(account);
-				await DatabaseContext.SaveChangesAsync();
-				return new(ResultType.Ok);
-			}
-			catch (Exception ex) {
-				Logger.LogError("Exception occured in {Location}: {Message}\n{StackTrace}", ex.Source, ex.Message, ex.StackTrace);
-				return new(ResultType.Exception);
-			}
+		catch (Exception ex) {
+			Logger.LogError("Login error: {Message}", ex.Message);
+			Logger.LogError("{StackTrace}", ex.StackTrace);
+			return new(ResultType.Exception);
 		}
+	}
 
-		public ServiceResult<string> Refresh(string token) {
-			try {
-				var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["JwtSettings:Key"]));
-				uint tokenLifetime = Configuration.GetValue<uint>("JwtSettings:TokenLifetime");
-				var handler = new JwtSecurityTokenHandler();
-				JwtSecurityToken jwt = handler.ReadJwtToken(token);
+	public async Task<ServiceResult<string>> RegisterAsync(RegisterDTO registerDTO) {
+		try {
+			if (await DatabaseContext.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
+				return new(ResultType.EmailTaken);
+			else if (await DatabaseContext.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
+				return new(ResultType.UsernameTaken);
 
-				token = handler.CreateEncodedJwt(
-					issuer: jwt.Issuer,
-					audience: jwt.Audiences.First(),
-					subject: new ClaimsIdentity(jwt.Claims),
-					notBefore: DateTime.UtcNow,
-					issuedAt: DateTime.UtcNow,
-					expires: DateTime.UtcNow.AddMinutes(tokenLifetime),
-					signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha512)
-				);
+			var (Password, Salt) = EncryptPassword(registerDTO.Password.ToString());
+			Account account = new() {
+				Email = registerDTO.Email,
+				Username = registerDTO.Username,
+				Password = Password,
+				Salt = Salt,
+				RoleID = DefaultRole.RoleID
+			};
 
-				return new(ResultType.Ok) {
-					Value = token
-				};
-			}
-			catch (Exception ex) {
-				Logger.LogError("Exception occured in {Location}: {Message}\n{StackTrace}", ex.Source, ex.Message, ex.StackTrace);
-				return new(ResultType.Exception);
-			}
+			await DatabaseContext.Accounts.AddAsync(account);
+			await DatabaseContext.SaveChangesAsync();
+			return new(ResultType.Ok);
 		}
-
-		public async Task<ServiceResult<object>> ChangePasswordAsync(PasswordDTO passwordDTO, string token) {
-			try {
-				Account account = await GetAccountFromToken(token);
-				var oldPassword = EncryptPassword(passwordDTO.OldPassword, account.Salt);
-				var newPassword = EncryptPassword(passwordDTO.NewPassword);
-
-				if (oldPassword.Password == account.Password) {
-					account.Password = newPassword.Password;
-					account.Salt = newPassword.Salt;
-					DatabaseContext.Accounts.Update(account);
-					DatabaseContext.SaveChanges();
-					return new(ResultType.Ok);
-				}
-
-				return new(ResultType.InvalidPassword);
-			}
-			catch (Exception ex) {
-				Logger.LogError("Exception occured in {Location}: {Message}\n{StackTrace}", ex.Source, ex.Message, ex.StackTrace);
-				return new(ResultType.Exception);
-			}
+		catch (Exception ex) {
+			Logger.LogError(ex, "Register error");
+			return new(ResultType.Exception);
 		}
+	}
 
-		private async Task<Account> GetAccountFromToken(string token) {
+	public ServiceResult<string> Refresh(string token) {
+		try {
+			var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["JwtSettings:Key"]));
+			uint tokenLifetime = Configuration.GetValue<uint>("JwtSettings:TokenLifetime");
 			var handler = new JwtSecurityTokenHandler();
 			JwtSecurityToken jwt = handler.ReadJwtToken(token);
-			int accountID = int.Parse(jwt.Subject);
 
-			return (await DatabaseContext.Accounts.FindAsync(accountID)) ?? throw new Exception("Couldn't find account with ID = " + accountID);
+			token = handler.CreateEncodedJwt(
+				issuer: jwt.Issuer,
+				audience: jwt.Audiences.First(),
+				subject: new ClaimsIdentity(jwt.Claims),
+				notBefore: DateTime.UtcNow,
+				issuedAt: DateTime.UtcNow,
+				expires: DateTime.UtcNow.AddMinutes(tokenLifetime),
+				signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha512)
+			);
+
+			return new(ResultType.Ok) {
+				Value = token
+			};
+		}
+		catch (Exception ex) {
+			Logger.LogError(ex, "Refresh error");
+			return new(ResultType.Exception);
+		}
+	}
+
+	public async Task<ServiceResult<object>> ChangePasswordAsync(PasswordDTO passwordDTO, string token) {
+		try {
+			Account account = await GetAccountFromToken(token);
+			var oldPassword = EncryptPassword(passwordDTO.OldPassword.ToString(), account.Salt);
+			var newPassword = EncryptPassword(passwordDTO.NewPassword.ToString());
+
+			if (oldPassword.Password == account.Password) {
+				account.Password = newPassword.Password;
+				account.Salt = newPassword.Salt;
+				DatabaseContext.Accounts.Update(account);
+				DatabaseContext.SaveChanges();
+				return new(ResultType.Ok);
+			}
+
+			return new(ResultType.InvalidPassword);
+		}
+		catch (Exception ex) {
+			Logger.LogError(ex, "Change password error");
+			return new(ResultType.Exception);
+		}
+	}
+
+	private async Task<Account> GetAccountFromToken(string token) {
+		var handler = new JwtSecurityTokenHandler();
+		JwtSecurityToken jwt = handler.ReadJwtToken(token);
+		int accountID = int.Parse(jwt.Subject);
+
+		return (await DatabaseContext.Accounts.FindAsync(accountID)) ?? throw new Exception("Couldn't find account with ID = " + accountID);
+	}
+
+	public async Task<ServiceResult<List<Permission>>> GetPermissions(int accountID) {
+		throw new NotImplementedException();
+		try {
+			Account account = await DatabaseContext.Accounts.SingleAsync(a => a.AccountID == accountID);
+			//Database.Permissions.
+		}
+		catch (Exception ex) {
+			Logger.LogError(ex, "Get permissions error");
+			return new(ResultType.Exception);
+		}
+	}
+
+	private static (string Password, string Salt) EncryptPassword(string password, string salt = null) {
+		byte[] saltBytes = new byte[128 / 8];
+		if (salt == null || salt == string.Empty) {
+			using var rng = RandomNumberGenerator.Create();
+			rng.GetNonZeroBytes(saltBytes);
+			salt = Convert.ToBase64String(saltBytes);
+		}
+		else {
+			saltBytes = Convert.FromBase64String(salt);
 		}
 
-		private static (string Password, string Salt) EncryptPassword(string password, string salt = null) {
-			byte[] saltBytes = new byte[128 / 8];
-			if (salt == null || salt == string.Empty) {
-				using var rng = RandomNumberGenerator.Create();
-				rng.GetNonZeroBytes(saltBytes);
-				salt = Convert.ToBase64String(saltBytes);
-			}
-			else {
-				saltBytes = Convert.FromBase64String(salt);
-			}
+		password = Convert.ToBase64String(KeyDerivation.Pbkdf2(
+			password: password,
+			salt: saltBytes,
+			prf: KeyDerivationPrf.HMACSHA512,
+			iterationCount: 100000,
+			numBytesRequested: 512 / 8));
 
-			password = Convert.ToBase64String(KeyDerivation.Pbkdf2(
-				password: password,
-				salt: saltBytes,
-				prf: KeyDerivationPrf.HMACSHA512,
-				iterationCount: 100000,
-				numBytesRequested: 512 / 8));
+		return (password, salt);
+	}
 
-			return (password, salt);
-		}
+	private async Task<Account> GetAccount(int? accountID = null, string username = null, string email = null) {
+		int argCount = 0;
+		argCount = accountID is null ? argCount : argCount + 1;
+		argCount = username is null ? argCount : argCount + 1;
+		argCount = email is null ? argCount : argCount + 1;
 
-		public async Task<ServiceResult<List<Permission>>> GetPermissions(int accountID) {
-			throw new NotImplementedException();
-			try {
-				Account account = await DatabaseContext.Accounts.SingleAsync(a => a.AccountID == accountID);
-				//Database.Permissions.
-			}
-			catch (Exception ex) {
-				Logger.LogError("Exception occured in {Location}: {Message}\n{StackTrace}", ex.Source, ex.Message, ex.StackTrace);
-				return new(ResultType.Exception);
-			}
-		}
+		if (argCount == 0)
+			throw new ArgumentException("At least one argument must be specified!");
+
+		Account account = null;
+		if (accountID is not null)
+			account = await DatabaseContext.Accounts.FindAsync(accountID);
+
+		if (username is not null && account is null)
+			account = await DatabaseContext.Accounts.SingleOrDefaultAsync(a => a.Username == username);
+
+		if (email is not null && account is null)
+			account = await DatabaseContext.Accounts.SingleOrDefaultAsync(a => a.Email == email);
+
+		return account;
 	}
 }

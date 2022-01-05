@@ -47,7 +47,7 @@ namespace WebAPI.Controllers {
 		[AllowAnonymous]
 		public async Task<ActionResult> Register(RegisterDTO registerDTO) {
 			Logger.LogInformation("[POST] Register");
-			Logger.LogInformation("{Email} - {Username}", registerDTO.Email, registerDTO.Username);
+			Logger.LogInformation("Email: {Email} Username: {Username}", registerDTO.Email, registerDTO.Username);
 			ResultType resultType = (await Accounts.RegisterAsync(registerDTO)).Type;
 			if (resultType == ResultType.Ok) {
 				Logger.LogInformation("New account created!");
