@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Runtime.Intrinsics.X86;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -26,21 +27,31 @@ namespace WebAPI.Controllers {
 		[HttpPost("login")]
 		[AllowAnonymous]
 		public async Task<ActionResult> Login(LoginDTO loginDTO) {
-			Logger.LogInformation("[POST] Login");
-			var result = await Accounts.LoginAsync(loginDTO);
-			switch (result.Type) {
+			var serviceResult = await Accounts.LoginAsync(loginDTO);
+
+			ActionResult result;
+			HttpStatusCode statusCode;
+			switch (serviceResult.Type) {
 				case ResultType.Ok:
-					Logger.LogInformation("User {Login} logged in. Token has been sent.", loginDTO.Login);
-					return Ok(result.Value);
+					result = Ok(serviceResult.Value);
+					statusCode = HttpStatusCode.OK;
+					break;
 				case ResultType.InvalidPassword:
-					Logger.LogInformation("User {Login} tried to log in with wrong password.", loginDTO.Login);
-					return NotFound();
+					result = NotFound();
+					statusCode = HttpStatusCode.NotFound;
+					break;
 				case ResultType.NotFound:
-					Logger.LogInformation("User {Login} doesn't exist", loginDTO.Login);
-					return NotFound();
+					result = NotFound();
+					statusCode = HttpStatusCode.NotFound;
+					break;
 				default:
-					return Problem(statusCode: 500);
+					result = Problem(statusCode: 500);
+					statusCode = HttpStatusCode.InternalServerError;
+					break;
 			}
+
+			Logger.LogInformation("[POST] Login: User {Login} | Result: {Result}", loginDTO.Login, statusCode);
+			return result;
 		}
 
 		[HttpPost("register")]

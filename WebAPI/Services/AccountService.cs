@@ -64,8 +64,7 @@ public class AccountService {
 				});
 		}
 		catch (Exception ex) {
-			Logger.LogError("Login error: {Message}", ex.Message);
-			Logger.LogError("{StackTrace}", ex.StackTrace);
+			Logger.LogError($"Login error: {ex.Message}\n{ex.StackTrace}");
 			return new(ResultType.Exception);
 		}
 	}

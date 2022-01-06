@@ -42,7 +42,8 @@ namespace WebAPI {
 				.AddJwtBearer();
 
 			services.AddTransient<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
-			services.AddScoped<AccountService>();
+			services.AddSingleton<AccountService>();
+			services.AddSingleton<JwtService>();
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
