@@ -118,4 +118,7 @@ public class JwtService {
 			iterationCount: 100000,
 			numBytesRequested: 512 / 8));
 	}
+
+	public string GetSubject(string token) =>
+		JwtHandler.ReadJwtToken(token).Subject;
 }

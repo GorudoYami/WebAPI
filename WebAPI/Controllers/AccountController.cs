@@ -5,6 +5,7 @@ using System.Net;
 using System.Runtime.Intrinsics.X86;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using WebAPI.Data;
@@ -12,93 +13,83 @@ using WebAPI.Data.Models;
 using WebAPI.Data.TransferObjects;
 using WebAPI.Services;
 
-namespace WebAPI.Controllers {
-	[ApiController]
-	[Route("api/[controller]")]
-	[Authorize]
-	public class AccountController : ControllerBase {
-		private readonly ILogger<AccountController> Logger;
-		private readonly AccountService Accounts;
-		public AccountController(ILogger<AccountController> logger, AccountService accounts) {
-			Accounts = accounts;
-			Logger = logger;
-		}
+namespace WebAPI.Controllers;
 
-		[HttpPost("login")]
-		[AllowAnonymous]
-		public async Task<ActionResult> Login(LoginDTO loginDTO) {
-			var serviceResult = await Accounts.LoginAsync(loginDTO);
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class AccountController : ControllerBase {
+	private readonly ILogger<AccountController> Logger;
+	private readonly AccountService Accounts;
+	private readonly JwtService Jwt;
 
-			ActionResult result;
-			HttpStatusCode statusCode;
-			switch (serviceResult.Type) {
-				case ResultType.Ok:
-					result = Ok(serviceResult.Value);
-					statusCode = HttpStatusCode.OK;
-					break;
-				case ResultType.InvalidPassword:
-					result = NotFound();
-					statusCode = HttpStatusCode.NotFound;
-					break;
-				case ResultType.NotFound:
-					result = NotFound();
-					statusCode = HttpStatusCode.NotFound;
-					break;
-				default:
-					result = Problem(statusCode: 500);
-					statusCode = HttpStatusCode.InternalServerError;
-					break;
-			}
+	public AccountController(ILogger<AccountController> logger, AccountService accounts, JwtService jwt) {
+		Logger = logger;
+		Accounts = accounts;
+		Jwt = jwt;
+	}
 
-			Logger.LogInformation("[POST] Login: User {Login} | Result: {Result}", loginDTO.Login, statusCode);
-			return result;
-		}
+	[HttpPost("login")]
+	[AllowAnonymous]
+	public async Task<ActionResult> Login(LoginDTO loginDTO) {
+		ServiceResult serviceResult = await Accounts.LoginAsync(loginDTO);
 
-		[HttpPost("register")]
-		[AllowAnonymous]
-		public async Task<ActionResult> Register(RegisterDTO registerDTO) {
-			Logger.LogInformation("[POST] Register");
-			Logger.LogInformation("Email: {Email} Username: {Username}", registerDTO.Email, registerDTO.Username);
-			ResultType resultType = (await Accounts.RegisterAsync(registerDTO)).Type;
-			if (resultType == ResultType.Ok) {
-				Logger.LogInformation("New account created!");
-				return NoContent();
-			}
-			else if (resultType == ResultType.EmailTaken) {
-				Logger.LogInformation("Email is already in use!");
-				return Conflict("Email is already in use!");
-			}
-			else if (resultType == ResultType.UsernameTaken) {
-				Logger.LogInformation("Username is already in use!");
-				return Conflict("Username is already in use!");
-			}
+		Logger.LogInformation(
+			"[POST] Login: User {Login} | Result {Result} | ServiceResult {ServiceResult}",
+			loginDTO.Login,
+			serviceResult.StatusCode,
+			serviceResult.Type);
 
-			return Problem(statusCode: 500);
-		}
+		return serviceResult.GetActionResult();
+	}
 
-		[HttpPost("refresh")]
-		public ActionResult Refresh([FromBody] string token) {
-			Logger.LogInformation("[POST] Refresh");
-			var result = Accounts.Refresh(token);
+	[HttpPost("register")]
+	[AllowAnonymous]
+	public async Task<ActionResult> Register(RegisterDTO registerDTO) {
+		ServiceResult serviceResult = await Accounts.RegisterAsync(registerDTO);
 
-			return result.Type == ResultType.Ok ? Ok(result.Value) : Problem(statusCode: 500);
-		}
+		Logger.LogInformation(
+			"[POST] Register: User {Username} Email {Email} | StatusCode {StatusCode} | ServiceResult {Type}",
+			registerDTO.Username,
+			registerDTO.Email,
+			serviceResult.StatusCode,
+			serviceResult.Type);
 
-		[HttpPost("changepassword")]
-		public async Task<ActionResult> ChangePassword(PasswordDTO passwordDTO) {
-			Logger.LogInformation("[POST] ChangePassword");
-			var result = await Accounts.ChangePasswordAsync(passwordDTO, HttpContext.Request.Headers["token"]);
+		return serviceResult.GetActionResult();
+	}
 
-			return result.Type switch {
-				ResultType.Ok => NoContent(),
-				ResultType.InvalidPassword => NotFound(ResultType.InvalidPassword),
-				_ => Problem(statusCode: 500)
-			};
-		}
+	[HttpGet("refresh")]
+	public ActionResult Refresh() {
+		string token = HttpContext.Request.Headers["token"];
+		ServiceResult serviceResult = Accounts.Refresh(token);
+		_ = int.TryParse(Jwt.GetSubject(token), out int accountID);
 
-		[HttpGet("permissions")]
-		public async Task<ActionResult<List<Permission>>> Permissions([FromBody] int accountID) {
-			throw new NotImplementedException();
-		}
+		Logger.LogInformation(
+			"[POST] Refresh: AccountID {AccountID} | Result {StatusCode} | ServiceResult {Type}",
+			accountID,
+			serviceResult.StatusCode,
+			serviceResult.Type);
+
+		return serviceResult.GetActionResult();
+	}
+
+	[HttpPost("changepassword")]
+	public async Task<ActionResult> ChangePassword(PasswordDTO passwordDTO) {
+		string token = HttpContext.Request.Headers["token"];
+		ServiceResult serviceResult = await Accounts.ChangePasswordAsync(passwordDTO, token);
+		_ = int.TryParse(Jwt.GetSubject(token), out int accountID);
+
+		Logger.LogInformation(
+			"[POST] ChangePassword: AccountID {AccountID} | Result {StatusCode} | ServiceResult {Type}",
+			accountID,
+			serviceResult.StatusCode,
+			serviceResult.Type);
+
+		return serviceResult.GetActionResult();
+	}
+
+	[HttpGet("permissions")]
+	public async Task<ActionResult<List<Permission>>> Permissions([FromBody] int accountID) {
+		throw new NotImplementedException();
 	}
 }

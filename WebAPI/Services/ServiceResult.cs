@@ -1,24 +1,59 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 
-namespace WebAPI.Services {
-	public enum ResultType {
-		Ok,
-		UsernameTaken,
-		EmailTaken,
-		NotFound,
-		InvalidPassword,
-		Exception
+namespace WebAPI.Services;
+
+public enum ResultType {
+	OK,
+	UsernameTaken,
+	EmailTaken,
+	NotFound,
+	InvalidPassword,
+	Exception
+}
+
+public class ServiceResult {
+	public ResultType Type { get; set; }
+	public HttpStatusCode StatusCode { get; set; }
+	public object Value { get; set; }
+	public string Message { get; set; }
+
+	public ServiceResult(ResultType result) {
+		Type = result;
+		RefreshMessage();
+		RefreshStatusCode();
 	}
 
-	public class ServiceResult<T> {
-		public T Value { get; set; }
-		public ResultType Type { get; set; }
+	private void RefreshMessage() {
+		Message = Type switch {
+			ResultType.OK => "OK",
+			ResultType.UsernameTaken => "Username taken",
+			ResultType.EmailTaken => "Email taken",
+			ResultType.NotFound => "Entity doesn't exist",
+			ResultType.InvalidPassword => "Invalid password",
+			ResultType.Exception => "Exception occured",
+			_ => null
+		};
+	}
 
-		public ServiceResult(ResultType result) {
-			Type = result;
-		}
+	private void RefreshStatusCode() {
+		StatusCode = Type switch {
+			ResultType.OK => HttpStatusCode.OK,
+			ResultType.UsernameTaken => HttpStatusCode.Conflict,
+			ResultType.EmailTaken => HttpStatusCode.Conflict,
+			ResultType.InvalidPassword => HttpStatusCode.NotFound,
+			ResultType.Exception => HttpStatusCode.InternalServerError,
+			_ => HttpStatusCode.InternalServerError
+		};
+	}
+
+	public ActionResult GetActionResult() {
+		return StatusCode == HttpStatusCode.OK
+			? new ObjectResult(Value) { StatusCode = (int)StatusCode }
+			: new ObjectResult(Message) { StatusCode = (int)StatusCode };
 	}
 }

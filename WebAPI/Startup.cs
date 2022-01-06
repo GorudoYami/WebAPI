@@ -13,53 +13,53 @@ using WebAPI.Services;
 using Microsoft.Extensions.Options;
 using WebAPI.Configuration;
 
-namespace WebAPI {
-	public class Startup {
-		public IConfiguration Configuration { get; }
+namespace WebAPI;
 
-		public Startup(IConfiguration configuration) {
-			Configuration = configuration;
-		}
+public class Startup {
+	public IConfiguration Configuration { get; }
 
-		// This method gets called by the runtime. Use this method to add services to the container.
-		public void ConfigureServices(IServiceCollection services) {
-			services.AddCors(options =>
-				// Change later
-				options.AddPolicy("AllowEverything", builder => {
-					builder.AllowAnyOrigin();
-					builder.AllowAnyMethod();
-					builder.AllowAnyHeader();
-				})
-			);
+	public Startup(IConfiguration configuration) {
+		Configuration = configuration;
+	}
 
-			services.AddControllers();
-			services.AddLogging();
+	// This method gets called by the runtime. Use this method to add services to the container.
+	public void ConfigureServices(IServiceCollection services) {
+		services.AddCors(options =>
+			// Change later
+			options.AddPolicy("AllowEverything", builder => {
+				builder.AllowAnyOrigin();
+				builder.AllowAnyMethod();
+				builder.AllowAnyHeader();
+			})
+		);
 
-			services.AddDbContext<DatabaseContext>(options =>
-				options.UseMySql(Configuration.GetConnectionString("Default"), new MySqlServerVersion("10.6.5")), ServiceLifetime.Singleton);
+		services.AddControllers();
+		services.AddLogging();
 
-			services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-				.AddJwtBearer();
+		services.AddDbContext<DatabaseContext>(options =>
+			options.UseMySql(Configuration.GetConnectionString("Default"), new MySqlServerVersion("10.6.5")), ServiceLifetime.Singleton);
 
-			services.AddTransient<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
-			services.AddSingleton<AccountService>();
-			services.AddSingleton<JwtService>();
-		}
+		services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+			.AddJwtBearer();
 
-		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-		public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DatabaseContext db) {
-			if (env.IsDevelopment())
-				app.UseDeveloperExceptionPage();
-			else
-				app.UseHsts();
+		services.AddTransient<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
+		services.AddSingleton<AccountService>();
+		services.AddSingleton<JwtService>();
+	}
 
-			db.Database.EnsureCreated();
-			app.UseHttpsRedirection();
-			app.UseRouting();
-			app.UseCors("AllowEverything");
-			app.UseAuthentication();
-			app.UseAuthorization();
-			app.UseEndpoints(endpoints => endpoints.MapControllers());
-		}
+	// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+	public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DatabaseContext db) {
+		if (env.IsDevelopment())
+			app.UseDeveloperExceptionPage();
+		else
+			app.UseHsts();
+
+		db.Database.EnsureCreated();
+		app.UseHttpsRedirection();
+		app.UseRouting();
+		app.UseCors("AllowEverything");
+		app.UseAuthentication();
+		app.UseAuthorization();
+		app.UseEndpoints(endpoints => endpoints.MapControllers());
 	}
 }
