@@ -18,14 +18,12 @@ using WebAPI.Data.TransferObjects;
 namespace WebAPI.Services;
 
 public class AccountService {
-	private readonly IConfiguration Configuration;
 	private readonly ILogger<AccountService> Logger;
 	private readonly DatabaseContext DatabaseContext;
 	private readonly JwtService JwtService;
 	private readonly Role DefaultRole;
 
-	public AccountService(IConfiguration configuration, ILogger<AccountService> logger, DatabaseContext database, JwtService jwtService) {
-		Configuration = configuration;
+	public AccountService(ILogger<AccountService> logger, DatabaseContext database, JwtService jwtService) {
 		DatabaseContext = database;
 		Logger = logger;
 		JwtService = jwtService;
@@ -54,9 +52,9 @@ public class AccountService {
 			if (account is null)
 				return new(ResultType.NotFound);
 
-			string password = JwtService.GetPasswordHash(loginDTO.Password, account.Salt);
+			string hash = JwtService.GetPasswordHash(loginDTO.Password, account.Salt);
 
-			return password != account.Password
+			return hash != account.Password
 				? (new(ResultType.NotFound))
 				: (new(ResultType.OK) {
 					Value = JwtService.CreateEncodedJwt(account.AccountID)
@@ -75,12 +73,12 @@ public class AccountService {
 			else if (await DatabaseContext.Accounts.Where(a => a.Email == registerDTO.Email).SingleOrDefaultAsync() != null)
 				return new(ResultType.UsernameTaken);
 
-			(string Password, string Salt) password = EncryptPassword(registerDTO.Password.ToString());
+			(string hash, string salt) = JwtService.GetPasswordHash(registerDTO.Password);
 			Account account = new() {
 				Email = registerDTO.Email,
 				Username = registerDTO.Username,
-				Password = password.Password,
-				Salt = password.Salt,
+				Password = hash,
+				Salt = salt,
 				RoleID = DefaultRole.RoleID
 			};
 
@@ -113,12 +111,12 @@ public class AccountService {
 			int accountID = int.Parse(JwtService.GetSubject(token));
 			Account account = await DatabaseContext.Accounts.FindAsync(accountID);
 
-			(string Password, string Salt) oldPassword = EncryptPassword(passwordDTO.OldPassword.ToString(), account.Salt);
-			(string Password, string Salt) newPassword = EncryptPassword(passwordDTO.NewPassword.ToString());
+			string oldHash = JwtService.GetPasswordHash(passwordDTO.OldPassword, account.Salt);
+			(string newHash, string newSalt) = JwtService.GetPasswordHash(passwordDTO.NewPassword);
 
-			if (oldPassword.Password == account.Password) {
-				account.Password = newPassword.Password;
-				account.Salt = newPassword.Salt;
+			if (oldHash == account.Password) {
+				account.Password = newHash;
+				account.Salt = newSalt;
 				DatabaseContext.Accounts.Update(account);
 				DatabaseContext.SaveChanges();
 				return new(ResultType.OK);
@@ -142,27 +140,6 @@ public class AccountService {
 			Logger.LogError(ex, "GetPermissions error: {Error}\n{StackTrace}", ex.Message, ex.StackTrace);
 			return new(ResultType.Exception);
 		}
-	}
-
-	private static (string Password, string Salt) EncryptPassword(string password, string salt = null) {
-		byte[] saltBytes = new byte[128 / 8];
-		if (salt == null || salt == string.Empty) {
-			using var rng = RandomNumberGenerator.Create();
-			rng.GetNonZeroBytes(saltBytes);
-			salt = Convert.ToBase64String(saltBytes);
-		}
-		else {
-			saltBytes = Convert.FromBase64String(salt);
-		}
-
-		password = Convert.ToBase64String(KeyDerivation.Pbkdf2(
-			password: password,
-			salt: saltBytes,
-			prf: KeyDerivationPrf.HMACSHA512,
-			iterationCount: 100000,
-			numBytesRequested: 512 / 8));
-
-		return (password, salt);
 	}
 
 	private async Task<Account> GetAccount(int? accountID = null, string username = null, string email = null) {

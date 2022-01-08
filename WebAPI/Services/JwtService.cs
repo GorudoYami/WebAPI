@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.SqlTypes;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
@@ -109,7 +110,7 @@ public class JwtService {
 	}
 
 	public string GetPasswordHash(string password, string saltString) {
-		byte[] salt = Encoding.UTF8.GetBytes(saltString);
+		byte[] salt = Convert.FromBase64String(saltString);
 
 		return Convert.ToBase64String(KeyDerivation.Pbkdf2(
 			password: password,
@@ -117,6 +118,21 @@ public class JwtService {
 			prf: KeyDerivationPrf.HMACSHA512,
 			iterationCount: 100000,
 			numBytesRequested: 512 / 8));
+	}
+
+	public (string hash, string salt) GetPasswordHash(string password) {
+		using var rng = RandomNumberGenerator.Create();
+		byte[] saltBytes = new byte[128 / 8];
+		rng.GetNonZeroBytes(saltBytes);
+		string hash = Convert.ToBase64String(KeyDerivation.Pbkdf2(
+			password: password,
+			salt: saltBytes,
+			prf: KeyDerivationPrf.HMACSHA512,
+			iterationCount: 100000,
+			numBytesRequested: 512 / 8));
+
+		string salt = Convert.ToBase64String(saltBytes);
+		return (hash, salt);
 	}
 
 	public string GetSubject(string token) =>

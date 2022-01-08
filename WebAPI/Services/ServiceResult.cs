@@ -46,6 +46,7 @@ public class ServiceResult {
 			ResultType.UsernameTaken => HttpStatusCode.Conflict,
 			ResultType.EmailTaken => HttpStatusCode.Conflict,
 			ResultType.InvalidPassword => HttpStatusCode.NotFound,
+			ResultType.NotFound => HttpStatusCode.NotFound,
 			ResultType.Exception => HttpStatusCode.InternalServerError,
 			_ => HttpStatusCode.InternalServerError
 		};

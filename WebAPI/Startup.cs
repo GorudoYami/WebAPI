@@ -12,6 +12,9 @@ using WebAPI.Data;
 using WebAPI.Services;
 using Microsoft.Extensions.Options;
 using WebAPI.Configuration;
+using Microsoft.Extensions.Logging;
+using NLog;
+using System.Diagnostics;
 
 namespace WebAPI;
 
@@ -37,14 +40,15 @@ public class Startup {
 		services.AddLogging();
 
 		services.AddDbContext<DatabaseContext>(options =>
-			options.UseMySql(Configuration.GetConnectionString("Default"), new MySqlServerVersion("10.6.5")), ServiceLifetime.Singleton);
+			options.UseMySql(Configuration.GetConnectionString("Default"), new MySqlServerVersion("10.6.5")));
+
+		services.AddScoped<AccountService>();
+		services.AddScoped<JwtService>();
 
 		services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 			.AddJwtBearer();
 
-		services.AddTransient<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
-		services.AddSingleton<AccountService>();
-		services.AddSingleton<JwtService>();
+		services.ConfigureOptions<ConfigureJwtBearerOptions>();
 	}
 
 	// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
