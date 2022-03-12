@@ -1,26 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.SqlTypes;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using WebAPI.Data;
 using WebAPI.Data.Models;
-using WebAPI.Data.TransferObjects;
+using WebAPI.Services.Interfaces;
 
 namespace WebAPI.Services;
 
-public class JwtService {
+public class JwtService : IJwtService {
 	private readonly ILogger<JwtService> Logger;
 	private readonly DatabaseContext DatabaseContext;
 
@@ -40,6 +34,7 @@ public class JwtService {
 		TokenAudience = GetTokenAudience();
 		JwtHandler = new JwtSecurityTokenHandler();
 	}
+
 	private int GetTokenLifetime() {
 		int tokenLifetime = 5;
 		try {

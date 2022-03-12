@@ -15,6 +15,7 @@ using WebAPI.Configuration;
 using Microsoft.Extensions.Logging;
 using NLog;
 using System.Diagnostics;
+using WebAPI.Services.Interfaces;
 
 namespace WebAPI;
 
@@ -42,8 +43,8 @@ public class Startup {
 		services.AddDbContext<DatabaseContext>(options =>
 			options.UseMySql(Configuration.GetConnectionString("Default"), new MySqlServerVersion("10.6.5")));
 
-		services.AddScoped<AccountService>();
-		services.AddScoped<JwtService>();
+		services.AddScoped<IAccountService, AccountService>();
+		services.AddScoped<IJwtService, JwtService>();
 
 		services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 			.AddJwtBearer();

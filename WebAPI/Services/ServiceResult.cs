@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using WebAPI.Services.Interfaces;
 
 namespace WebAPI.Services;
 
@@ -16,7 +17,7 @@ public enum ResultType {
 	Exception
 }
 
-public class ServiceResult {
+public class ServiceResult : IServiceResult {
 	public ResultType Type { get; set; }
 	public HttpStatusCode StatusCode { get; set; }
 	public object Value { get; set; }
