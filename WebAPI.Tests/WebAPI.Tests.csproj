@@ -5,6 +5,8 @@
     <Nullable>annotations</Nullable>
 
     <IsPackable>false</IsPackable>
+
+    <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>

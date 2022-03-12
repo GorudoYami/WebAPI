@@ -15,7 +15,7 @@ using WebAPI.Services.Interfaces;
 namespace WebAPI.Services;
 
 public class JwtService : IJwtService {
-	private readonly ILogger<JwtService> Logger;
+	private readonly ILogger<IJwtService> Logger;
 	private readonly DatabaseContext DatabaseContext;
 
 	private readonly JwtSecurityTokenHandler JwtHandler;
@@ -24,7 +24,7 @@ public class JwtService : IJwtService {
 	private readonly string TokenAudience;
 	private readonly int TokenLifetime;
 
-	public JwtService(ILogger<JwtService> logger, DatabaseContext databaseContext) {
+	public JwtService(ILogger<IJwtService> logger, DatabaseContext databaseContext) {
 		Logger = logger;
 		DatabaseContext = databaseContext;
 

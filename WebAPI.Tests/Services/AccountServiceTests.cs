@@ -11,18 +11,7 @@ using Moq;
 
 namespace WebAPI.Tests.Services;
 
-[TestFixture]
-public class JwtServiceTests
+public class AccountServiceTests
 {
-	private JwtService Jwt { get; set; }
 
-	[SetUp]
-	public void Setup()
-	{
-		var logger = new Mock<ILogger<IJwtService>>();
-		Jwt = new JwtService(logger.Object, null);
-	}
-
-	[Test]
-	public void 
 }
